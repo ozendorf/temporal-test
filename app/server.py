@@ -1,6 +1,7 @@
 """A tiny JSON HTTP API built on the standard library (no dependencies)."""
 from __future__ import annotations
 
+import functools
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Callable
@@ -8,6 +9,7 @@ from typing import Callable
 from . import todos
 
 Handler = Callable[[dict | None], tuple[int, object]]
+IdHandler = Callable[[str, dict | None], tuple[int, object]]
 
 # (method, path) -> handler. Add new endpoints here.
 ROUTES: dict[tuple[str, str], Handler] = {
@@ -15,10 +17,20 @@ ROUTES: dict[tuple[str, str], Handler] = {
     ("POST", "/todos"): lambda body: todos.create_todo(body or {}),
 }
 
+# (method, prefix) -> handler for "<prefix>/<id>" paths.
+ID_ROUTES: dict[tuple[str, str], IdHandler] = {
+    ("PATCH", "/todos"): lambda todo_id, _body: todos.mark_done(todo_id),
+}
+
 
 class RequestHandler(BaseHTTPRequestHandler):
     def _dispatch(self, method: str) -> None:
         handler = ROUTES.get((method, self.path))
+        if handler is None:
+            prefix, _, segment = self.path.rpartition("/")
+            id_handler = ID_ROUTES.get((method, prefix))
+            if id_handler is not None:
+                handler = functools.partial(id_handler, segment)
         if handler is None:
             return self._send(404, {"error": "not found"})
         body = None
@@ -36,6 +48,9 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         self._dispatch("POST")
+
+    def do_PATCH(self) -> None:  # noqa: N802
+        self._dispatch("PATCH")
 
     def _send(self, status: int, payload: object) -> None:
         data = json.dumps(payload).encode()
