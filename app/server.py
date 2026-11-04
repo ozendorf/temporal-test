@@ -13,6 +13,7 @@ Handler = Callable[[dict | None], tuple[int, object]]
 ROUTES: dict[tuple[str, str], Handler] = {
     ("GET", "/todos"): lambda _body: (200, todos.list_todos()),
     ("POST", "/todos"): lambda body: todos.create_todo(body or {}),
+    ("GET", "/health"): lambda _body: (200, {"status": "ok", "todos": len(todos.list_todos())}),
 }
 
 
